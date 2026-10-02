@@ -1,0 +1,103 @@
+/* App.css - Dark Mode Metro Command Center */
+body {
+  margin: 0;
+  background-color: #0b0f19; /* Deep dark background */
+  color: #e2e8f0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.dashboard-container {
+  max-width: 1050px;
+  margin: 50px auto;
+  padding: 0 20px;
+}
+
+.dashboard-header {
+  text-align: left;
+  margin-bottom: 30px;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 20px;
+}
+
+.dashboard-header h1 {
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.dashboard-header p {
+  color: #94a3b8;
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* Glassmorphism/Dark Card layout */
+.table-container {
+  background: #111827;
+  border-radius: 12px;
+  border: 1px solid #1f2937;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+.styled-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.styled-table thead tr {
+  background-color: #1f2937;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.styled-table th,
+.styled-table td {
+  padding: 18px 24px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.styled-table tbody tr:hover {
+  background-color: #1e293b;
+  transition: all 0.2s ease-in-out;
+}
+
+.styled-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.fw-bold {
+  font-weight: 600;
+  color: #f8fafc;
+  font-family: monospace;
+  font-size: 1.1rem;
+}
+
+/* Neon Glow Status Badges */
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.fit_for_service {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.1);
+}
+
+.empty-state {
+  text-align: center;
+  color: #64748b;
+  font-style: italic;
+  padding: 40px !important;
+}

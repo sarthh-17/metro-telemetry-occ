@@ -1,0 +1,16 @@
+# Node & React
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+
+# Java & Spring Boot
+target/
+*.class
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDEs
+.vscode/
+.idea/
+*.iml
