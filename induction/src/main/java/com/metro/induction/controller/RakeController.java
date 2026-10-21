@@ -33,4 +33,15 @@ public class RakeController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    // --- ADDED: Delete endpoint ---
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteRake(@PathVariable Long id) {
+        if (!rakeRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        rakeRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+   
 }
