@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KMRL - Metro Operations & Fleet Management System</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            railway: {
+              950: '#05111e',
+              900: '#0f2b46',
+              800: '#003366',
+              700: '#024b8e',
+              600: '#005bb5',
+              50: '#f0f4f8'
+            },
+            kmrl: {
+              teal: '#00a896',
+              darkteal: '#028090',
+              lightteal: '#e6f7f5',
+              cyan: '#00b4d8',
+              amber: '#d97706'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* Railway styling additions */
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f4f6f9;
+      color: #1e293b;
+    }
+    
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #e2e8f0;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #94a3b8;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+
+    /* Pulse effects for live radar/status */
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.92); }
+    }
+    .status-pulse {
+      animation: statusPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    @keyframes emergencyFlash {
+      0%, 100% { background-color: rgba(220, 38, 38, 0.15); }
+      50% { background-color: rgba(220, 38, 38, 0.35); }
+    }
+    .emergency-banner {
+      animation: emergencyFlash 1.2s infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-100 text-slate-800 antialiased selection:bg-kmrl-teal selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback } = React;
+
+    // --- MOCK INITIAL DATA ---
+    const INITIAL_OPERATORS = [
+      { id: 'DISPATCHER.4', name: 'R. Rajesh Nair', location: 'Muttom OCC HQ', role: 'Chief Dispatcher', shift: 'Morning Shift (06:00 - 14:00)' },
+      { id: 'DEPOT_SUP.2', name: 'A. Menon', location: 'Kalamassery Yard', role: 'Depot Superintendent', shift: 'General Shift (08:30 - 17:00)' },
+      { id: 'SAFETY_AUDITOR', name: 'K. Varma', location: 'KMRL Bhavan', role: 'Chief Safety Auditor', shift: '24h Duty Rotation' }
+    ];
+
+    const STATIONS_LINE_1 = [
+      { id: 'ST-01', name: 'Aluva', code: 'ALVA', distKm: 0.0, type: 'Terminal' },
+      { id: 'ST-02', name: 'Pulinchodu', code: 'PCDU', distKm: 1.8, type: 'Regular' },
+      { id: 'ST-03', name: 'Companypady', code: 'CPDY', distKm: 2.9, type: 'Regular' },
+      { id: 'ST-04', name: 'Ambattukavu', code: 'AMBK', distKm: 4.0, type: 'Regular' },
+      { id: 'ST-05', name: 'Kalamassery', code: 'KLMY', distKm: 5.4, type: 'Depot Interchange' },
+      { id: 'ST-06', name: 'Cochin University', code: 'CUSAT', distKm: 6.8, type: 'Regular' },
+      { id: 'ST-07', name: 'Pathadipalam', code: 'PTPM', distKm: 8.1, type: 'Regular' },
+      { id: 'ST-08', name: 'Edapally', code: 'EDPL', distKm: 9.3, type: 'Major Interchange' },
+      { id: 'ST-09', name: 'Changampuzha Park', code: 'CGP', distKm: 10.6, type: 'Regular' },
+      { id: 'ST-10', name: 'Palarivattom', code: 'PLVM', distKm: 11.9, type: 'Regular' },
+      { id: 'ST-11', name: 'JLN Stadium', code: 'JLNS', distKm: 13.0, type: 'Major Interchange' },
+      { id: 'ST-12', name: 'Kaloor', code: 'KLR', distKm: 14.1, type: 'Regular' },
+      { id: 'ST-13', name: 'Lissie', code: 'LSI', distKm: 15.3, type: 'Regular' },
+      { id: 'ST-14', name: 'Maharajas College', code: 'MHC', distKm: 16.5, type: 'Regular' },
+      { id: 'ST-15', name: 'Ernakulam South', code: 'ERS', distKm: 18.2, type: 'Railway Interchange' },
+      { id: 'ST-16', name: 'Kadavanthra', code: 'KDVT', distKm: 19.6, type: 'Regular' },
+      { id: 'ST-17', name: 'Elamkulam', code: 'ELMK', distKm: 20.8, type: 'Regular' },
+      { id: 'ST-18', name: 'Vytilla', code: 'VYTL', distKm: 22.1, type: 'Mobility Hub' },
+      { id: 'ST-19', name: 'Thykkoodam', code: 'TKDM', distKm: 23.4, type: 'Regular' },
+      { id: 'ST-20', name: 'Pettah', code: 'PTAH', distKm: 24.6, type: 'Regular' },
+      { id: 'ST-21', name: 'Vadakkekotta', code: 'VDKK', distKm: 25.8, type: 'Regular' },
+      { id: 'ST-22', name: 'SN Junction', code: 'SNJ', distKm: 26.9, type: 'Regular' },
+      { id: 'ST-23', name: 'Thripunithura', code: 'TPTR', distKm: 28.1, type: 'Terminal' }
+    ];
+
+    const INITIAL_RAKES = [
+      { id: 'R-101', status: 'In Service', mileage: 84250, fitnessExp: '2027-04-15', health: 98, block: 'S-12 (Kaloor)', speed: 54, voltage: 748, motorTemp: 42, hvacPress: 4.2, driver: 'S. Kumar (D-102)' },
+      { id: 'R-102', status: 'In Service', mileage: 92100, fitnessExp: '2026-11-20', health: 95, block: 'S-18 (Vytilla)', speed: 48, voltage: 752, motorTemp: 44, hvacPress: 4.1, driver: 'M. Jacob (D-114)' },
+      { id: 'TR-6031', status: 'Maintenance', mileage: 115400, fitnessExp: '2026-10-30', health: 72, block: 'S-88 (Interlock Wait)', speed: 0, voltage: 0, motorTemp: 28, hvacPress: 0.0, driver: 'UNASSIGNED' },
+      { id: 'R-104', status: 'Fit For Service', mileage: 68900, fitnessExp: '2027-01-12', health: 99, block: 'Kalamassery Depot', speed: 0, voltage: 750, motorTemp: 31, hvacPress: 4.3, driver: 'STANDBY' },
+      { id: 'R-105', status: 'In Service', mileage: 77320, fitnessExp: '2027-03-05', health: 94, block: 'S-05 (Kalamassery)', speed: 60, voltage: 751, motorTemp: 46, hvacPress: 4.0, driver: 'V. Thomas (D-201)' },
+      { id: 'R-106', status: 'Fit For Service', mileage: 54100, fitnessExp: '2027-08-22', health: 97, block: 'Muttom Yard Track 3', speed: 0, voltage: 749, motorTemp: 30, hvacPress: 4.2, driver: 'STANDBY' },
+      { id: 'R-107', status: 'In Service', mileage: 88400, fitnessExp: '2026-12-01', health: 91, block: 'S-22 (SN Junction)', speed: 52, voltage: 745, motorTemp: 48, hvacPress: 3.9, driver: 'P. Pradeep (D-108)' },
+      { id: 'R-108', status: 'Maintenance', mileage: 128900, fitnessExp: '2026-10-25', health: 68, block: 'Kalamassery Bay 2', speed: 0, voltage: 0, motorTemp: 26, hvacPress: 0.0, driver: 'MAINT_CREW_B' },
+      { id: 'R-109', status: 'Fit For Service', mileage: 42000, fitnessExp: '2027-09-10', health: 100, block: 'Muttom Stabling Line 1', speed: 0, voltage: 750, motorTemp: 29, hvacPress: 4.3, driver: 'STANDBY' },
+      { id: 'R-110', status: 'In Service', mileage: 96500, fitnessExp: '2026-11-05', health: 93, block: 'S-08 (Edapally)', speed: 58, voltage: 753, motorTemp: 45, hvacPress: 4.1, driver: 'A. Joseph (D-119)' },
+      { id: 'R-111', status: 'Out of Service', mileage: 142000, fitnessExp: '2026-09-30', health: 55, block: 'Muttom Heavy Repair Bay', speed: 0, voltage: 0, motorTemp: 25, hvacPress: 0.0, driver: 'NONE' },
+      { id: 'R-112', status: 'Fit For Service', mileage: 31200, fitnessExp: '2027-11-18', health: 99, block: 'Kalamassery Stabling', speed: 0, voltage: 750, motorTemp: 28, hvacPress: 4.3, driver: 'STANDBY' }
+    ];
+
+    const INITIAL_ACTIVITY_LOGS = [
+      { id: 1, time: '14:22:10', type: 'DISPATCH', text: 'Extra rake R-104 assigned to Line 1 Northbound (Aluva Express).', severity: 'info' },
+      { id: 2, time: '14:15:00', type: 'SAFETY', text: 'Line Interlock Active: TR-6031 on Block S-88 (Interlock sensor wait signal). Inspector team notified.', severity: 'warning' },
+      { id: 3, time: '14:02:45', type: 'TELEMETRY', text: 'Rake R-102 telemetry sync confirmed: Pantograph voltage stable at 752V DC.', severity: 'success' },
+      { id: 4, time: '13:48:30', type: 'MAINTENANCE', text: 'R-108 scheduled HVAC maintenance initiated at Kalamassery Bay 2.', severity: 'neutral' },
+      { id: 5, time: '13:30:12', type: 'INSPECTION', text: 'Annual Fitness Certificate issued for Rake R-109 (Valid till Sep 2027).', severity: 'success' }
+    ];
+
+    const INITIAL_INTERLOCKS = [
+      { id: 'INT-8802', trainId: 'TR-6031', block: 'BLOCK S-88', cause: 'Interlock sensor wait signal. Track inspector team notified.', status: 'ACTIVE HOLD', time: '14:15 UTC', speedCap: '0 km/h' }
+    ];
+
+    // --- MAIN APP COMPONENT ---
+    function App() {
+      const [currentModule, setCurrentModule] = useState('dashboard'); // dashboard, occ, fleet, map, safety, analytics
+      const [activeOperator, setActiveOperator] = useState(INITIAL_OPERATORS[0]);
+      const [showOperatorModal, setShowOperatorModal] = useState(false);
+      
+      // Data States
+      const [rakes, setRakes] = useState(INITIAL_RAKES);
+      const [interlocks, setInterlocks] = useState(INITIAL_INTERLOCKS);
+      const [activityLogs, setActivityLogs] = useState(INITIAL_ACTIVITY_LOGS);
+      const [isAllStopActive, setIsAllStopActive] = useState(false);
+
+      // Clocks
+      const [utcTime, setUtcTime] = useState('');
+      const [istTime, setIstTime] = useState('');
+
+      // UI States
+      const [toasts, setToasts] = useState([]);
+      const [isRefreshing, setIsRefreshing] = useState(false);
+      const [showNotificationsMenu, setShowNotificationsMenu] = useState(false);
+
+      // Modals
+      const [showDispatchModal, setShowDispatchModal] = useState(false);
+      const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+      const [showInterlockModal, setShowInterlockModal] = useState(null);
+
+      // Clock effect
+      useEffect(() => {
+        const updateClocks = () => {
+          const now = new Date();
+          setUtcTime(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
+          setIstTime(now.toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' }) + ' IST');
+        };
+        updateClocks();
+        const interval = setInterval(updateClocks, 1000);
+        return () => clearInterval(interval);
+      }, []);
+
+      // Toast notification helper
+      const addToast = useCallback((message, type = 'info') => {
+        const id = Date.now() + Math.random();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 4500);
+      }, []);
+
+      // Refresh Data Action
+      const handleRefreshData = () => {
+        setIsRefreshing(true);
+        setTimeout(() => {
+          setIsRefreshing(false);
+          addToast('System telemetry & fleet database synchronized with OCC HQ.', 'success');
+        }, 700);
+      };
+
+      // Add activity log helper
+      const addActivityLog = (text, type = 'SYSTEM', severity = 'info') => {
+        const now = new Date();
+        const timeStr = now.toTimeString().substring(0, 8);
+        const newLog = { id: Date.now(), time: timeStr, type, text, severity };
+        setActivityLogs(prev => [newLog, ...prev.slice(0, 24)]);
+      };
+
+      // Metrics computations
+      const metrics = useMemo(() => {
+        const totalRakes = 48; // Full system inventory (represented by 12 mock detail entries)
+        const inService = rakes.filter(r => r.status === 'In Service').length;
+        const fitReady = rakes.filter(r => r.status === 'Fit For Service').length;
+        const maintenance = rakes.filter(r => r.status === 'Maintenance').length;
+        const outOfService = rakes.filter(r => r.status === 'Out of Service').length;
+        const activeSafetyHolds = interlocks.length + (isAllStopActive ? 1 : 0);
+        return { totalRakes, inService, fitReady, maintenance, outOfService, activeSafetyHolds, onTimeIndex: '98.4%', headwayAvg: '±14s' };
+      }, [rakes, interlocks, isAllStopActive]);
+
+      // All Stop Execution
+      const executeAllStop = () => {
+        setIsAllStopActive(true);
+        setRakes(prev => prev.map(r => r.status === 'In Service' ? { ...r, speed: 0, status: 'In Service' } : r));
+        addActivityLog('EMERGENCY ALL STOP PROTOCOL ACTIVATED BY DISPATCHER. ALL TRAINS HALTED.', 'EMERGENCY', 'danger');
+        addToast('ALL STOP PROTOCOL EXECUTED. Mandatory emergency hold broadcasted.', 'danger');
+        setShowEmergencyModal(false);
+      };
+
+      const resumeAllStop = () => {
+        setIsAllStopActive(false);
+        addActivityLog('Emergency All Stop Protocol revoked. Normal signaling resumed.', 'SAFETY', 'success');
+        addToast('Safety emergency hold cleared. Dispatch operations resumed.', 'success');
+      };
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          {/* EMERGENCY ALL STOP FULL-SCREEN BANNER IF ACTIVE */}
+          {isAllStopActive && (
+            <div className="bg-red-600 text-white font-mono px-4 py-2.5 flex items-center justify-between shadow-lg z-50 emergency-banner border-b-2 border-red-800">
+              <div className="flex items-center space-x-3">
+                <span className="text-xl animate-bounce">⚠️</span>
+                <div>
+                  <span className="font-bold text-lg tracking-wider">SYSTEM-WIDE EMERGENCY ALL STOP ACTIVE</span>
+                  <span className="text-xs text-red-100 ml-3">All track signals set to RED Danger. Traction power interlocked.</span>
+                </div>
+              </div>
+              <button 
+                onClick={resumeAllStop}
+                className="bg-white text-red-700 hover:bg-red-50 text-xs font-bold px-4 py-1.5 rounded shadow transition-colors"
+              >
+                REVOKE ALL STOP & RESUME SIGNALING
+              </button>
+            </div>
+          )}
+
+          {/* TOP HEADER / SYSTEM STATUS BAR */}
+          <header className="bg-railway-900 text-white border-b border-railway-800 sticky top-0 z-40 shadow-md">
+            <div className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+              {/* Logo & Portal Identity */}
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-lg bg-kmrl-teal flex items-center justify-center text-white font-bold text-xl shadow-inner border border-teal-300/30">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-extrabold tracking-wider text-base text-white">KOCHI METRO RAIL LIMITED</span>
+                    <span className="bg-kmrl-teal/20 text-teal-300 border border-teal-500/40 text-[10px] font-mono px-1.5 py-0.5 rounded uppercase">Official Portal</span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-mono tracking-wide">METRO OPERATIONS & FLEET MANAGEMENT SYSTEM</p>
+                </div>
+              </div>
+
+              {/* Status & Live Indicators */}
+              <div className="flex items-center flex-wrap gap-3 text-xs">
+                {/* System Status Pill */}
+                <div className="flex items-center bg-railway-950/80 border border-railway-700 rounded px-2.5 py-1 space-x-2 font-mono">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 status-pulse"></span>
+                  <span className="text-emerald-400 font-bold tracking-wide">SYS.ONLINE</span>
+                </div>
+
+                {/* UTC & IST Clocks */}
+                <div className="hidden sm:flex flex-col text-right font-mono text-[11px] bg-railway-950/60 px-3 py-1 rounded border border-railway-800">
+                  <span className="text-slate-300">{utcTime || '2026-10-22 14:24:00 UTC'}</span>
+                  <span className="text-teal-300 font-semibold">{istTime || '19:54:00 IST'}</span>
+                </div>
+
+                {/* Safety Holds Counter Badge */}
+                <div 
+                  onClick={() => setCurrentModule('safety')}
+                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded font-mono font-bold cursor-pointer transition-colors border ${
+                    metrics.activeSafetyHolds > 0 
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30' 
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  }`}
+                  title="Click to view Active Safety Desk"
+                >
+                  <span className="text-sm">⚠️</span>
+                  <span>{metrics.activeSafetyHolds} SAFETY HOLD</span>
+                </div>
+
+                {/* Notifications Bell Dropdown */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowNotificationsMenu(!showNotificationsMenu)}
+                    className="p-1.5 rounded bg-railway-800 hover:bg-railway-700 border border-railway-700 text-slate-200 transition-colors relative"
+                    title="Operational System Alerts"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                    {activityLogs.some(l => l.severity === 'warning' || l.severity === 'danger') && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-railway-900"></span>
+                    )}
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {showNotificationsMenu && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white text-slate-800 rounded-md shadow-2xl border border-slate-300 py-2 z-50 font-sans">
+                      <div className="px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
+                        <span className="font-bold text-xs uppercase tracking-wider text-slate-700">Live System Alerts</span>
+                        <span className="text-[10px] bg-slate-100 font-mono px-1.5 py-0.5 rounded text-slate-500">{activityLogs.length} events</span>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                        {activityLogs.map(log => (
+                          <div key={log.id} className="p-2.5 text-xs hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center justify-between font-mono text-[10px] text-slate-400 mb-0.5">
+                              <span className="font-semibold text-railway-800">[{log.type}]</span>
+                              <span>{log.time}</span>
+                            </div>
+                            <p className="text-slate-700 leading-snug">{log.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Operator Profile Badge Button */}
+                <button 
+                  onClick={() => setShowOperatorModal(true)}
+                  className="flex items-center space-x-2 bg-railway-800 hover:bg-railway-700 border border-railway-700 px-2.5 py-1 rounded text-left transition-colors"
+                >
+                  <div className="w-5 h-5 rounded-full bg-kmrl-teal text-white flex items-center justify-center font-bold text-[10px]">
+                    {activeOperator.id.substring(0, 2)}
+                  </div>
+                  <div className="hidden md:block">
+                    <div className="font-mono text-[11px] font-bold text-teal-300 leading-none">{activeOperator.id}</div>
+                    <div className="text-[9px] text-slate-300 leading-none mt-0.5">{activeOperator.location}</div>
+                  </div>
+                  <span className="text-slate-400 text-[10px]">▼</span>
+                </button>
+
+                {/* Refresh Data Trigger */}
+                <button
+                  onClick={handleRefreshData}
+                  disabled={isRefreshing}
+                  className="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white font-mono text-xs px-2.5 py-1 rounded border border-slate-600 flex items-center space-x-1 transition-all"
+                >
+                  <span className={isRefreshing ? 'animate-spin' : ''}>↻</span>
+                  <span className="hidden sm:inline">REFRESH DATA</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* MAIN LAYOUT WITH PERSISTENT SIDEBAR */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* SIDEBAR NAVIGATION */}
+            <aside className="w-16 md:w-64 bg-railway-900 text-slate-300 flex flex-col border-r border-railway-800 shrink-0">
+              <div className="p-3 text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider hidden md:block border-b border-railway-800/60">
+                Navigation Modules
+              </div>
+              <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+                <NavItem 
+                  id="dashboard" 
+                  icon="📊" 
+                  label="Overview Dashboard" 
+                  badge={null}
+                  active={currentModule === 'dashboard'} 
+                  onClick={() => setCurrentModule('dashboard')} 
+                />
+                <NavItem 
+                  id="occ" 
+                  icon="🎛️" 
+                  label="Operations Control Center" 
+                  badge={metrics.inService ? `${metrics.inService} Active` : null}
+                  badgeColor="bg-teal-500/20 text-teal-300 border-teal-500/30"
+                  active={currentModule === 'occ'} 
+                  onClick={() => setCurrentModule('occ')} 
+                />
+                <NavItem 
+                  id="fleet" 
+                  icon="🔧" 
+                  label="Fleet & Telemetry" 
+                  badge={metrics.maintenance ? `${metrics.maintenance} Maint.` : null}
+                  badgeColor="bg-amber-500/20 text-amber-300 border-amber-500/30"
+                  active={currentModule === 'fleet'} 
+                  onClick={() => setCurrentModule('fleet')} 
+                />
+                <NavItem 
+                  id="map" 
+                  icon="🛤️" 
+                  label="Live Line & Route Map" 
+                  badge="Line 1"
+                  badgeColor="bg-blue-500/20 text-blue-300 border-blue-500/30"
+                  active={currentModule === 'map'} 
+                  onClick={() => setCurrentModule('map')} 
+                />
+                <NavItem 
+                  id="safety" 
+                  icon="⚠️" 
+                  label="Safety & Incident Desk" 
+                  badge={metrics.activeSafetyHolds > 0 ? `${metrics.activeSafetyHolds} Hold` : 'OK'}
+                  badgeColor={metrics.activeSafetyHolds > 0 ? "bg-red-500/20 text-red-300 border-red-500/30" : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"}
+                  active={currentModule === 'safety'} 
+                  onClick={() => setCurrentModule('safety')} 
+                />
+                <NavItem 
+                  id="analytics" 
+                  icon="📈" 
+                  label="Analytics & Fitness Reports" 
+                  badge={null}
+                  active={currentModule === 'analytics'} 
+                  onClick={() => setCurrentModule('analytics')} 
+                />
+              </nav>
+
+              {/* Sidebar Footer Info */}
+              <div className="p-3 border-t border-railway-800 text-xs font-mono text-slate-400 hidden md:block">
+                <div className="text-[10px] text-slate-500 uppercase">Station HQ</div>
+                <div className="font-semibold text-slate-300">Muttom Depot OCC</div>
+                <div className="text-[10px] text-teal-400 mt-1">KMRL RailNet v3.4.2</div>
+              </div>
+            </aside>
+
+            {/* MAIN CENTRAL CONTENT AREA */}
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-100">
+              {currentModule === 'dashboard' && (
+                <ViewDashboard 
+                  operator={activeOperator} 
+                  metrics={metrics} 
+                  rakes={rakes} 
+                  activityLogs={activityLogs} 
+                  setCurrentModule={setCurrentModule} 
+                />
+              )}
+
+              {currentModule === 'occ' && (
+                <ViewOCC 
+                  rakes={rakes} 
+                  setRakes={setRakes}
+                  interlocks={interlocks}
+                  setInterlocks={setInterlocks}
+                  metrics={metrics}
+                  addToast={addToast}
+                  addActivityLog={addActivityLog}
+                  openDispatchModal={() => setShowDispatchModal(true)}
+                  openEmergencyModal={() => setShowEmergencyModal(true)}
+                  setShowInterlockModal={setShowInterlockModal}
+                />
+              )}
+
+              {currentModule === 'fleet' && (
+                <ViewFleet 
+                  rakes={rakes} 
+                  setRakes={setRakes}
+                  addToast={addToast}
+                  addActivityLog={addActivityLog}
+                />
+              )}
+
+              {currentModule === 'map' && (
+                <ViewLineMap 
+                  stations={STATIONS_LINE_1} 
+                  rakes={rakes} 
+                />
+              )}
+
+              {currentModule === 'safety' && (
+                <ViewSafety 
+                  interlocks={interlocks} 
+                  setInterlocks={setInterlocks}
+                  activityLogs={activityLogs}
+                  addToast={addToast}
+                  addActivityLog={addActivityLog}
+                  isAllStopActive={isAllStopActive}
+                  resumeAllStop={resumeAllStop}
+                />
+              )}
+
+              {currentModule === 'analytics' && (
+                <ViewAnalytics 
+                  rakes={rakes} 
+                  metrics={metrics} 
+                />
+              )}
+            </main>
+          </div>
+
+          {/* SYSTEM FOOTER */}
+          <footer className="bg-slate-900 text-slate-400 border-t border-slate-800 px-4 py-2 text-xs flex flex-wrap items-center justify-between font-mono z-30">
+            <div className="flex items-center space-x-4">
+              <span>KOCHI METRO RAIL LIMITED © 2026</span>
+              <span className="hidden md:inline text-slate-600">|</span>
+              <span className="hidden md:inline text-slate-400">LINE 1: ALUVA - THRIPUNITHURA (28.1 KM)</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-emerald-400">Latency: 12ms</span>
+              <span className="text-slate-600">|</span>
+              <span>REST API: ACTIVE</span>
+            </div>
+          </footer>
+
+          {/* TOAST CONTAINER */}
+          <div className="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full">
+            {toasts.map(toast => (
+              <div 
+                key={toast.id} 
+                className={`pointer-events-auto p-3.5 rounded-lg shadow-xl text-xs font-mono border flex items-start space-x-3 transition-all transform translate-y-0 ${
+                  toast.type === 'danger' ? 'bg-red-900 text-red-100 border-red-700' :
+                  toast.type === 'warning' ? 'bg-amber-900 text-amber-100 border-amber-700' :
+                  toast.type === 'success' ? 'bg-emerald-900 text-emerald-100 border-emerald-700' :
+                  'bg-railway-900 text-slate-100 border-railway-700'
+                }`}
+              >
+                <span className="text-base leading-none">
+                  {toast.type === 'danger' ? '🚨' : toast.type === 'warning' ? '⚠️' : toast.type === 'success' ? '✅' : 'ℹ️'}
+                </span>
+                <div className="flex-1 leading-relaxed">{toast.message}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* MODALS */}
+          {/* 1. SWITCH OPERATOR MODAL */}
+          {showOperatorModal && (
+            <Modal title="Switch Active Operator Duty Profile" onClose={() => setShowOperatorModal(false)}>
+              <div className="space-y-3 font-sans">
+                <p className="text-xs text-slate-600">
+                  Select an authenticated railway operator profile to switch session permissions:
+                </p>
+                <div className="space-y-2">
+                  {INITIAL_OPERATORS.map(op => (
+                    <div 
+                      key={op.id}
+                      onClick={() => {
+                        setActiveOperator(op);
+                        setShowOperatorModal(false);
+                        addToast(`Duty profile switched to ${op.id} (${op.name}).`, 'info');
+                      }}
+                      className={`p-3 rounded border cursor-pointer transition-all flex items-center justify-between ${
+                        activeOperator.id === op.id 
+                          ? 'border-kmrl-teal bg-teal-50 text-slate-900 font-medium' 
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-mono text-xs font-bold text-railway-800">{op.id} - {op.name}</div>
+                        <div className="text-xs text-slate-500">{op.role} • {op.location}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{op.shift}</div>
+                      </div>
+                      {activeOperator.id === op.id && (
+                        <span className="bg-kmrl-teal text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold">ACTIVE</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Modal>
+          )}
+
+          {/* 2. DISPATCH EXTRA MODAL */}
+          {showDispatchModal && (
+            <DispatchExtraModal 
+              rakes={rakes} 
+              onClose={() => setShowDispatchModal(false)}
+              onDispatch={(rakeId, route, priority, driver) => {
+                setRakes(prev => prev.map(r => r.id === rakeId ? { ...r, status: 'In Service', block: route, speed: 45, driver } : r));
+                addActivityLog(`Rake ${rakeId} dispatched extra service on ${route} [Priority: ${priority}].`, 'DISPATCH', 'info');
+                addToast(`Rake ${rakeId} successfully dispatched! Service active on ${route}.`, 'success');
+                setShowDispatchModal(false);
+              }}
+            />
+          )}
+
+          {/* 3. EMERGENCY ALL STOP PROTOCOL MODAL */}
+          {showEmergencyModal && (
+            <EmergencyStopModal 
+              onClose={() => setShowEmergencyModal(false)}
+              onConfirm={executeAllStop}
+            />
+          )}
+
+          {/* 4. INTERLOCK RESOLUTION MODAL */}
+          {showInterlockModal && (
+            <Modal title={`Active Line Interlock: ${showInterlockModal.trainId}`} onClose={() => setShowInterlockModal(null)}>
+              <div className="space-y-4 text-xs font-sans">
+                <div className="bg-amber-50 border border-amber-300 rounded p-3 text-amber-900 font-mono">
+                  <div className="font-bold text-sm text-amber-900">{showInterlockModal.block}</div>
+                  <div className="mt-1">{showInterlockModal.cause}</div>
+                  <div className="mt-2 text-[10px] text-amber-700">Timestamp: {showInterlockModal.time} | Speed Cap: {showInterlockModal.speedCap}</div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block font-semibold text-slate-700">Track Inspector Clearance Status:</label>
+                  <p className="text-slate-600 leading-relaxed">
+                    Track Inspector Team inspects Kalamassery to CUSAT rail block S-88. Confirm line clearance before overriding safety interlock.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200">
+                  <button 
+                    onClick={() => setShowInterlockModal(null)}
+                    className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100 font-mono"
+                  >
+                    Close Inspection Detail
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setInterlocks(prev => prev.filter(i => i.id !== showInterlockModal.id));
+                      addActivityLog(`Interlock on ${showInterlockModal.block} cleared by ${activeOperator.id}. Normal speed restored.`, 'SAFETY', 'success');
+                      addToast(`Line Interlock ${showInterlockModal.id} cleared. Normal signaling restored.`, 'success');
+                      setShowInterlockModal(null);
+                    }}
+                    className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold"
+                  >
+                    RESOLVE & CLEAR INTERLOCK
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // --- NAV ITEM COMPONENT ---
+    function NavItem({ id, icon, label, badge, badgeColor, active, onClick }) {
+      return (
+        <button
+          onClick={onClick}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
+            active 
+              ? 'bg-railway-800 text-white shadow-inner font-semibold border-l-4 border-kmrl-teal' 
+              : 'text-slate-300 hover:bg-railway-800/50 hover:text-white'
+          }`}
+        >
+          <div className="flex items-center space-x-2.5 truncate">
+            <span className="text-base">{icon}</span>
+            <span className="hidden md:inline truncate">{label}</span>
+          </div>
+          {badge && (
+            <span className={`hidden md:inline-block px-1.5 py-0.5 text-[10px] font-mono rounded border ${badgeColor || 'bg-slate-800 text-slate-300 border-slate-700'}`}>
+              {badge}
+            </span>
+          )}
+        </button>
+      );
+    }
+
+    // --- REUSABLE MODAL CONTAINER ---
+    function Modal({ title, children, onClose }) {
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-railway-900 text-white px-4 py-3 flex items-center justify-between border-b border-railway-800">
+              <h3 className="font-bold text-sm tracking-wide font-mono">{title}</h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white text-lg font-bold">×</button>
+            </div>
+            <div className="p-5">
+              {children}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- VIEW 1: OVERVIEW DASHBOARD ---
+    function ViewDashboard({ operator, metrics, rakes, activityLogs, setCurrentModule }) {
+      return (
+        <div className="space-y-6">
+          {/* Welcome Panel */}
+          <div className="bg-gradient-to-r from-railway-900 via-railway-800 to-railway-900 text-white rounded-xl p-5 shadow-md border border-railway-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2 font-mono text-xs text-teal-300">
+                <span>OPERATOR DUTY SESSION</span>
+                <span>•</span>
+                <span>{operator.id}</span>
+              </div>
+              <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">
+                Welcome back, {operator.name}
+              </h1>
+              <p className="text-xs text-slate-300 max-w-2xl">
+                Kochi Metro Line 1 Operations Control & Fleet Dispatch. All telemetry streams online and synchronized with Muttom OCC Master Terminal.
+              </p>
+            </div>
+            <div className="bg-railway-950/80 p-3 rounded-lg border border-railway-700/80 font-mono text-xs space-y-1 shrink-0">
+              <div className="text-slate-400 text-[10px]">CURRENT SHIFT PROFILE</div>
+              <div className="text-teal-300 font-bold">{operator.role}</div>
+              <div className="text-slate-300 text-[11px]">{operator.shift}</div>
+            </div>
+          </div>
+
+          {/* Metric Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <MetricCard title="TOTAL FLEET SIZE" value={`${metrics.totalFleetSize || 48} Rakes`} sub="Kochi Metro Rakes" color="border-l-railway-700" />
+            <MetricCard title="ACTIVE CONSISTS" value={`${metrics.inService} / 48`} sub="In Service Line 1" color="border-l-emerald-500" highlight />
+            <MetricCard title="FIT FOR SERVICE" value={`${metrics.fitReady} Ready`} sub="Depot Stabling" color="border-l-teal-500" />
+            <MetricCard title="UNDER MAINTENANCE" value={`${metrics.maintenance} Rakes`} sub="Scheduled / Depot" color="border-l-amber-500" />
+            <MetricCard title="ON-TIME INDEX" value={metrics.onTimeIndex} sub={`Headway ${metrics.headwayAvg}`} color="border-l-blue-500" />
+            <MetricCard title="SAFETY HOLDS" value={`${metrics.activeSafetyHolds} Active`} sub="Track Interlocks" color={metrics.activeSafetyHolds > 0 ? "border-l-red-500" : "border-l-slate-400"} />
+          </div>
+
+          {/* Prominent Navigation Jump Tiles */}
+          <div>
+            <h2 className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wider mb-3">
+              Core Management Modules
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <ModuleJumpCard 
+                icon="🎛️"
+                title="Operations Control Center"
+                subtitle="Live telemetry dispatch, train table, safety interlocks & telemetry data entry."
+                buttonText="Open OCC Dispatch Panel"
+                color="hover:border-kmrl-teal"
+                onClick={() => setCurrentModule('occ')}
+              />
+              <ModuleJumpCard 
+                icon="🔧"
+                title="Fleet & Maintenance"
+                subtitle="750V DC pantograph metrics, HVAC pressure, braking status & maintenance schedules."
+                buttonText="Open Fleet Manager"
+                color="hover:border-amber-500"
+                onClick={() => setCurrentModule('fleet')}
+              />
+              <ModuleJumpCard 
+                icon="🛤️"
+                title="Live Route Map"
+                subtitle="Line 1 schematic (Aluva to Thripunithura), real-time train positions & speeds."
+                buttonText="View Line 1 Map"
+                color="hover:border-blue-500"
+                onClick={() => setCurrentModule('map')}
+              />
+              <ModuleJumpCard 
+                icon="⚠️"
+                title="Safety & Incident Desk"
+                subtitle="Track interlocks, emergency halt audit trails & track inspector logs."
+                buttonText="Open Safety Desk"
+                color="hover:border-red-500"
+                onClick={() => setCurrentModule('safety')}
+              />
+            </div>
+          </div>
+
+          {/* Fleet Utilization Chart & Operational Activity Feed */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* SVG Fleet Readiness Chart */}
+            <div className="lg:col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-200 flex flex-col">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Fleet Deployment & Utilization Readiness</h3>
+                  <p className="text-xs text-slate-500">Live operational status distribution across Muttom & Kalamassery Depots</p>
+                </div>
+                <span className="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                  Line 1 Capacity: 50% Active
+                </span>
+              </div>
+
+              <div className="mt-4 flex-1 flex flex-col justify-center">
+                {/* Visual Bar Distribution */}
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-xs font-mono mb-1">
+                      <span className="font-semibold text-emerald-700">In Active Passenger Service ({metrics.inService} rakes)</span>
+                      <span className="font-bold text-slate-700">{Math.round((metrics.inService / 12) * 100)}% of active pool</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+                      <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${(metrics.inService / 12) * 100}%` }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs font-mono mb-1">
+                      <span className="font-semibold text-teal-700">Fit For Service / Standby ({metrics.fitReady} rakes)</span>
+                      <span className="font-bold text-slate-700">{Math.round((metrics.fitReady / 12) * 100)}% of active pool</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+                      <div className="bg-kmrl-teal h-full rounded-full transition-all duration-500" style={{ width: `${(metrics.fitReady / 12) * 100}%` }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs font-mono mb-1">
+                      <span className="font-semibold text-amber-700">Under Scheduled Maintenance ({metrics.maintenance} rakes)</span>
+                      <span className="font-bold text-slate-700">{Math.round((metrics.maintenance / 12) * 100)}% of active pool</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+                      <div className="bg-amber-500 h-full rounded-full transition-all duration-500" style={{ width: `${(metrics.maintenance / 12) * 100}%` }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs font-mono mb-1">
+                      <span className="font-semibold text-red-700">Out of Service / Heavy Overhaul ({metrics.outOfService} rakes)</span>
+                      <span className="font-bold text-slate-700">{Math.round((metrics.outOfService / 12) * 100)}% of active pool</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+                      <div className="bg-red-500 h-full rounded-full transition-all duration-500" style={{ width: `${(metrics.outOfService / 12) * 100}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fleet Health Quick Key */}
+                <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-3 gap-2 text-center font-mono text-xs">
+                  <div className="bg-emerald-50 p-2 rounded border border-emerald-100">
+                    <div className="text-[10px] text-emerald-800 font-bold uppercase">Avg Traction Voltage</div>
+                    <div className="text-base font-extrabold text-emerald-900">750.2 V DC</div>
+                  </div>
+                  <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                    <div className="text-[10px] text-blue-800 font-bold uppercase">Average Fleet Health</div>
+                    <div className="text-base font-extrabold text-blue-900">92.8 %</div>
+                  </div>
+                  <div className="bg-teal-50 p-2 rounded border border-teal-100">
+                    <div className="text-[10px] text-teal-800 font-bold uppercase">Signal Response</div>
+                    <div className="text-base font-extrabold text-teal-900">&lt; 14 ms</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity Feed */}
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 flex flex-col">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <h3 className="font-bold text-slate-800 text-sm">Operational Activity Timeline</h3>
+                <span className="text-[10px] font-mono text-slate-400">Live Telemetry Stream</span>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 max-h-80">
+                {activityLogs.map(log => (
+                  <div key={log.id} className="text-xs border-l-2 border-slate-300 pl-3 py-1 space-y-0.5">
+                    <div className="flex items-center justify-between font-mono text-[10px] text-slate-400">
+                      <span className="font-bold text-railway-800">[{log.type}]</span>
+                      <span>{log.time}</span>
+                    </div>
+                    <p className="text-slate-700 leading-snug">{log.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- METRIC CARD HELPER ---
+    function MetricCard({ title, value, sub, color, highlight }) {
+      return (
+        <div className={`bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm border-l-4 ${color}`}>
+          <div className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">{title}</div>
+          <div className={`text-xl font-extrabold font-mono mt-1 ${highlight ? 'text-kmrl-darkteal' : 'text-slate-800'}`}>{value}</div>
+          <div className="text-[11px] text-slate-500 font-mono mt-0.5">{sub}</div>
+        </div>
+      );
+    }
+
+    // --- MODULE JUMP CARD HELPER ---
+    function ModuleJumpCard({ icon, title, subtitle, buttonText, color, onClick }) {
+      return (
+        <div className={`bg-white rounded-xl p-4 shadow-sm border border-slate-200 transition-all ${color} flex flex-col justify-between group`}>
+          <div>
+            <div className="text-2xl mb-2">{icon}</div>
+            <h3 className="font-bold text-slate-800 text-sm group-hover:text-railway-700 transition-colors">{title}</h3>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">{subtitle}</p>
+          </div>
+          <button 
+            onClick={onClick}
+            className="mt-4 w-full bg-slate-100 hover:bg-railway-900 hover:text-white text-slate-700 font-mono text-xs font-bold py-2 rounded transition-all text-center border border-slate-200"
+          >
+            {buttonText} →
+          </button>
+        </div>
+      );
+    }
+
+    // --- MODULE ONE: OPERATIONS CONTROL CENTER (OCC) ---
+    function ViewOCC({ rakes, setRakes, interlocks, setInterlocks, metrics, addToast, addActivityLog, openDispatchModal, openEmergencyModal, setShowInterlockModal }) {
+      const [filter, setFilter] = useState('All');
+      const [searchQuery, setSearchQuery] = useState('');
+
+      // Telemetry Entry Form States
+      const [telemetryRakeId, setTelemetryRakeId] = useState('R-102');
+      const [telemetryMileage, setTelemetryMileage] = useState('');
+      const [telemetryStatus, setTelemetryStatus] = useState('Fit For Service');
+      const [telemetryVoltage, setTelemetryVoltage] = useState('750');
+
+      // Filtered rakes list
+      const filteredRakes = useMemo(() => {
+        return rakes.filter(rake => {
+          const matchesFilter = filter === 'All' || rake.status === filter;
+          const matchesSearch = rake.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                rake.block.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                rake.driver.toLowerCase().includes(searchQuery.toLowerCase());
+          return matchesFilter && matchesSearch;
+        });
+      }, [rakes, filter, searchQuery]);
+
+      // Telemetry Form Submit
+      const handleTelemetrySubmit = (e) => {
+        e.preventDefault();
+        if (!telemetryRakeId) return;
+
+        setRakes(prev => prev.map(r => {
+          if (r.id === telemetryRakeId) {
+            return {
+              ...r,
+              mileage: telemetryMileage ? parseInt(telemetryMileage) : r.mileage,
+              status: telemetryStatus,
+              voltage: parseInt(telemetryVoltage) || 750
+            };
+          }
+          return r;
+        }));
+
+        addActivityLog(`Telemetry data updated for Rake ${telemetryRakeId}: Mileage ${telemetryMileage || 'Unchanged'}, Status ${telemetryStatus}.`, 'TELEMETRY', 'success');
+        addToast(`Telemetry for ${telemetryRakeId} recorded successfully.`, 'success');
+        setTelemetryMileage('');
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* OCC Title Banner */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+            <div>
+              <div className="flex items-center space-x-2 font-mono text-xs text-slate-500 uppercase">
+                <span>ROLLING STOCK TELEMETRY</span>
+                <span>/</span>
+                <span className="text-railway-800 font-bold">OCC-HQ DISPATCH</span>
+              </div>
+              <h1 className="text-2xl font-extrabold text-railway-900 tracking-tight font-mono">
+                Operations Control Center (OCC)
+              </h1>
+            </div>
+            <div className="flex items-center space-x-2 font-mono text-xs">
+              <span className="bg-slate-200 text-slate-700 px-2.5 py-1 rounded border border-slate-300">
+                LIVE TELEMETRY SYNCED
+              </span>
+            </div>
+          </div>
+
+          {/* Main OCC 3-Column Layout matching Screenshot context */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* LEFT COLUMN: OCC DISPATCH CONTROLS & LINE INTERLOCKS (3 cols) */}
+            <div className="lg:col-span-3 space-y-5">
+              
+              {/* OCC Dispatch Controls Box */}
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 space-y-3">
+                <h3 className="font-mono text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  OCC Dispatch Controls
+                </h3>
+                
+                {/* DISPATCH EXTRA BUTTON */}
+                <button 
+                  onClick={openDispatchModal}
+                  className="w-full bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-mono font-bold text-xs py-3 px-4 rounded shadow transition-all flex items-center justify-center space-x-2"
+                >
+                  <span>🚂</span>
+                  <span>DISPATCH EXTRA</span>
+                </button>
+
+                {/* ALL STOP PROTOCOL BUTTON */}
+                <button 
+                  onClick={openEmergencyModal}
+                  className="w-full bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 font-mono font-bold text-xs py-3 px-4 rounded transition-all flex items-center justify-center space-x-2"
+                >
+                  <span>🚨</span>
+                  <span>ALL STOP PROTOCOL</span>
+                </button>
+              </div>
+
+              {/* Active Line Interlocks Box */}
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 space-y-3">
+                <h3 className="font-mono text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  Active Line Interlocks
+                </h3>
+
+                {interlocks.length === 0 ? (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded text-center text-xs font-mono text-slate-500">
+                    No active line interlocks.
+                  </div>
+                ) : (
+                  interlocks.map(lock => (
+                    <div 
+                      key={lock.id}
+                      onClick={() => setShowInterlockModal(lock)}
+                      className="bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded p-3 cursor-pointer transition-all space-y-1"
+                    >
+                      <div className="font-mono font-bold text-xs text-amber-900 flex items-center justify-between">
+                        <span>{lock.trainId} // {lock.block}</span>
+                        <span className="text-[10px] bg-amber-200 px-1 rounded">INSPECT</span>
+                      </div>
+                      <p className="text-xs text-amber-800 leading-snug font-sans">
+                        {lock.cause}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Telemetry Data Entry Form */}
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 space-y-3">
+                <h3 className="font-mono text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  Submit New Telemetry Data
+                </h3>
+                <form onSubmit={handleTelemetrySubmit} className="space-y-3 font-mono text-xs">
+                  <div>
+                    <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Rake #</label>
+                    <select 
+                      value={telemetryRakeId} 
+                      onChange={(e) => setTelemetryRakeId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1.5 focus:bg-white focus:outline-none"
+                    >
+                      {rakes.map(r => (
+                        <option key={r.id} value={r.id}>{r.id} ({r.status})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Mileage (km)</label>
+                    <input 
+                      type="number" 
+                      placeholder="e.g. 92150"
+                      value={telemetryMileage}
+                      onChange={(e) => setTelemetryMileage(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Status</label>
+                      <select 
+                        value={telemetryStatus} 
+                        onChange={(e) => setTelemetryStatus(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-[11px]"
+                      >
+                        <option value="Fit For Service">Fit Ready</option>
+                        <option value="In Service">In Service</option>
+                        <option value="Maintenance">Maintenance</option>
+                        <option value="Out of Service">Out Service</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Voltage (V)</label>
+                      <input 
+                        type="number" 
+                        value={telemetryVoltage}
+                        onChange={(e) => setTelemetryVoltage(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-[11px]"
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-railway-800 hover:bg-railway-700 text-white font-bold py-2 rounded transition-colors"
+                  >
+                    SUBMIT TELEMETRY DATA
+                  </button>
+                </form>
+              </div>
+
+            </div>
+
+            {/* MIDDLE COLUMN: FILTERS & TRAIN TABLE (6 cols) */}
+            <div className="lg:col-span-6 space-y-4">
+              
+              {/* Rake Filter Bar & Search */}
+              <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                {/* Status Filter Buttons */}
+                <div className="flex items-center space-x-1 font-mono text-xs">
+                  {['All', 'Fit For Service', 'Maintenance', 'Out of Service'].map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`px-3 py-1.5 rounded transition-all font-semibold ${
+                        filter === f 
+                          ? 'bg-kmrl-teal text-white shadow' 
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {f === 'Fit For Service' ? 'Fit Ready' : f}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search Rake Input */}
+                <div className="relative font-mono text-xs flex-1 max-w-xs">
+                  <input 
+                    type="text" 
+                    placeholder="Search rake # / location..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded pl-3 pr-8 py-1.5 focus:outline-none focus:bg-white"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1.5 text-slate-400">✕</button>
+                  )}
+                </div>
+              </div>
+
+              {/* Rake Table */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left font-mono text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px]">
+                        <th className="p-3">Rake ID</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Total Mileage</th>
+                        <th className="p-3">Location / Block</th>
+                        <th className="p-3">Fitness Expiry</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredRakes.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="p-8 text-center text-slate-400 font-mono">
+                            No rakes match your filter or search query.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredRakes.map(rake => (
+                          <tr key={rake.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="p-3 font-bold text-railway-900">{rake.id}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                rake.status === 'In Service' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                rake.status === 'Fit For Service' ? 'bg-teal-100 text-teal-800 border-teal-300' :
+                                rake.status === 'Maintenance' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                                'bg-red-100 text-red-800 border-red-300'
+                              }`}>
+                                {rake.status}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-700">{rake.mileage.toLocaleString()} km</td>
+                            <td className="p-3 text-slate-600 text-[11px]">{rake.block}</td>
+                            <td className="p-3 text-slate-500 text-[11px]">{rake.fitnessExp}</td>
+                            <td className="p-3 text-right space-x-1">
+                              <button 
+                                onClick={() => {
+                                  const newStatus = rake.status === 'Maintenance' ? 'Fit For Service' : 'Maintenance';
+                                  setRakes(prev => prev.map(r => r.id === rake.id ? { ...r, status: newStatus } : r));
+                                  addToast(`Rake ${rake.id} status updated to ${newStatus}.`, 'info');
+                                }}
+                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold"
+                                title="Toggle Maintenance Mode"
+                              >
+                                {rake.status === 'Maintenance' ? 'Clear Maint.' : 'Maint.'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+            {/* RIGHT COLUMN: SUMMARY KPI PANELS (3 cols matching screenshot) */}
+            <div className="lg:col-span-3 space-y-4 font-mono">
+              
+              {/* Active Consists Card */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ACTIVE CONSISTS</div>
+                <div className="text-3xl font-extrabold text-slate-900">{metrics.inService} <span className="text-slate-400 text-lg font-normal">/ 48</span></div>
+                <div className="text-xs text-emerald-600 font-semibold pt-1">Line 1 North-South Mainline</div>
+              </div>
+
+              {/* Fit For Service Card */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-2">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">FIT FOR SERVICE</div>
+                <div className="flex items-center space-x-3">
+                  <div className="text-3xl font-extrabold text-teal-600">{metrics.fitReady}</div>
+                  <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-2.5 py-1 rounded">
+                    READY
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-sans">Available for immediate OCC line dispatch from Muttom Stabling.</p>
+              </div>
+
+              {/* On-Time Index Card */}
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ON-TIME INDEX</div>
+                <div className="text-3xl font-extrabold text-railway-800">{metrics.onTimeIndex}</div>
+                <div className="text-xs text-slate-500">HEADWAY {metrics.headwayAvg} AVG</div>
+              </div>
+
+              {/* Fleet Telemetry Quick Stats */}
+              <div className="bg-railway-900 text-white p-4 rounded-xl shadow-sm border border-railway-800 space-y-2 text-xs">
+                <div className="font-bold text-teal-300 text-[11px] border-b border-railway-700 pb-1 uppercase">
+                  Traction Power Grid
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Target Voltage:</span>
+                  <span className="font-bold text-white">750V DC</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Substations Online:</span>
+                  <span className="font-bold text-emerald-400">12 / 12</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Automatic Train Guard:</span>
+                  <span className="font-bold text-teal-300">ACTIVE</span>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+    // --- MODULE TWO: FLEET MAINTENANCE & TELEMETRY ---
+    function ViewFleet({ rakes, setRakes, addToast, addActivityLog }) {
+      const [selectedRake, setSelectedRake] = useState(rakes[0]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+            <div>
+              <div className="flex items-center space-x-2 font-mono text-xs text-slate-500 uppercase">
+                <span>MODULE TWO</span>
+                <span>/</span>
+                <span className="text-railway-800 font-bold">TELEMETRY DIAGNOSTICS</span>
+              </div>
+              <h1 className="text-2xl font-extrabold text-railway-900 tracking-tight font-mono">
+                Fleet Maintenance & Telemetry Inspector
+              </h1>
+            </div>
+            <div className="font-mono text-xs bg-slate-200 text-slate-700 px-2.5 py-1 rounded border border-slate-300">
+              Muttom Maintenance Depot Terminal
+            </div>
+          </div>
+
+          {/* Rake Selection Grid */}
+          <div>
+            <label className="block text-xs font-mono font-bold text-slate-500 uppercase mb-2">Select Rake for Deep Diagnostic Inspection:</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 font-mono text-xs">
+              {rakes.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => setSelectedRake(r)}
+                  className={`p-2.5 rounded-lg border text-left transition-all ${
+                    selectedRake.id === r.id 
+                      ? 'bg-railway-900 text-white border-railway-700 shadow-md ring-2 ring-kmrl-teal' 
+                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                  }`}
+                >
+                  <div className="font-bold">{r.id}</div>
+                  <div className="text-[10px] text-slate-400 truncate mt-0.5">{r.status}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Rake Detail Diagnostic Panel */}
+          {selectedRake && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Telemetry Sensor Gauge Overview */}
+              <div className="lg:col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <span className="text-xs font-mono text-slate-400">RAKE TELEMETRY DIAGNOSTICS</span>
+                    <h2 className="text-xl font-bold font-mono text-railway-900">{selectedRake.id} Diagnostic Output</h2>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded font-mono text-xs font-bold ${
+                    selectedRake.status === 'In Service' ? 'bg-emerald-100 text-emerald-800' :
+                    selectedRake.status === 'Fit For Service' ? 'bg-teal-100 text-teal-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {selectedRake.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
+                  <TelemetryGauge label="Pantograph Voltage" value={`${selectedRake.voltage || 750} V`} norm="750V DC" status="normal" />
+                  <TelemetryGauge label="Traction Motor Temp" value={`${selectedRake.motorTemp || 42} °C`} norm="< 65°C" status="normal" />
+                  <TelemetryGauge label="HVAC Pressure" value={`${selectedRake.hvacPress || 4.2} bar`} norm="4.0 - 4.5 bar" status="normal" />
+                  <TelemetryGauge label="Health Score" value={`${selectedRake.health}%`} norm="> 80%" status={selectedRake.health > 80 ? "normal" : "warning"} />
+                </div>
+
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <h3 className="font-mono text-xs font-bold text-slate-700 uppercase">Subsystem Safety Integrity Checks</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                    <IntegrityItem name="Automatic Braking System (ABS)" status="PASSED" details="Pressure holding at 5.2 bar" />
+                    <IntegrityItem name="Door Interlock Sensors" status="PASSED" details="24 / 24 doors sealed" />
+                    <IntegrityItem name="Third Rail Current Collector" status="PASSED" details="Zero arcing detected" />
+                    <IntegrityItem name="Passenger HVAC Conditioning" status="OK" details="Cabin temp 22.5°C" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Maintenance Schedule & Actions */}
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 space-y-4 font-mono text-xs">
+                <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-2">Maintenance Job Card</h3>
+                
+                <div className="space-y-2 text-slate-600">
+                  <div className="flex justify-between">
+                    <span>Assigned Driver:</span>
+                    <span className="font-bold text-slate-800">{selectedRake.driver}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Mileage:</span>
+                    <span className="font-bold text-slate-800">{selectedRake.mileage.toLocaleString()} km</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Fitness Expiry:</span>
+                    <span className="font-bold text-slate-800">{selectedRake.fitnessExp}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Current Block:</span>
+                    <span className="font-bold text-slate-800">{selectedRake.block}</span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 space-y-2">
+                  <button 
+                    onClick={() => {
+                      const updatedDate = '2027-12-31';
+                      setRakes(prev => prev.map(r => r.id === selectedRake.id ? { ...r, fitnessExp: updatedDate, health: 100 } : r));
+                      setSelectedRake(prev => ({ ...prev, fitnessExp: updatedDate, health: 100 }));
+                      addActivityLog(`Fitness Certificate renewed for ${selectedRake.id} until ${updatedDate}.`, 'MAINTENANCE', 'success');
+                      addToast(`Fitness Certificate renewed for ${selectedRake.id}!`, 'success');
+                    }}
+                    className="w-full bg-kmrl-teal hover:bg-teal-600 text-white font-bold py-2 rounded transition-colors"
+                  >
+                    RENEW FITNESS CERTIFICATE
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      const newStatus = selectedRake.status === 'Maintenance' ? 'Fit For Service' : 'Maintenance';
+                      setRakes(prev => prev.map(r => r.id === selectedRake.id ? { ...r, status: newStatus } : r));
+                      setSelectedRake(prev => ({ ...prev, status: newStatus }));
+                      addToast(`${selectedRake.id} toggled to ${newStatus}.`, 'info');
+                    }}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2 rounded border border-slate-300 transition-colors"
+                  >
+                    TOGGLE DEPOT MAINTENANCE MODE
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function TelemetryGauge({ label, value, norm, status }) {
+      return (
+        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+          <div className="text-[10px] text-slate-400 font-bold uppercase">{label}</div>
+          <div className={`text-lg font-extrabold mt-0.5 ${status === 'warning' ? 'text-amber-600' : 'text-slate-800'}`}>{value}</div>
+          <div className="text-[9px] text-slate-500 mt-0.5">Norm: {norm}</div>
+        </div>
+      );
+    }
+
+    function IntegrityItem({ name, status, details }) {
+      return (
+        <div className="p-2 bg-slate-50 border border-slate-200 rounded">
+          <div className="flex justify-between items-center font-bold">
+            <span className="text-slate-700">{name}</span>
+            <span className="text-emerald-600 text-[10px]">{status}</span>
+          </div>
+          <div className="text-[10px] text-slate-500 mt-0.5">{details}</div>
+        </div>
+      );
+    }
+
+    // --- MODULE THREE: LIVE LINE & ROUTE MAP ---
+    function ViewLineMap({ stations, rakes }) {
+      const [selectedStation, setSelectedStation] = useState(null);
+
+      // Active rakes on line
+      const activeRakes = useMemo(() => rakes.filter(r => r.status === 'In Service'), [rakes]);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+            <div>
+              <div className="flex items-center space-x-2 font-mono text-xs text-slate-500 uppercase">
+                <span>MODULE THREE</span>
+                <span>/</span>
+                <span className="text-railway-800 font-bold">SCHEMATIC ROUTE MAP</span>
+              </div>
+              <h1 className="text-2xl font-extrabold text-railway-900 tracking-tight font-mono">
+                Live Line 1 Route (Aluva ↔ Thripunithura)
+              </h1>
+            </div>
+            <div className="font-mono text-xs bg-slate-200 text-slate-700 px-2.5 py-1 rounded border border-slate-300">
+              Total Distance: 28.1 km • 23 Stations
+            </div>
+          </div>
+
+          {/* Line Schematic Container */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 overflow-x-auto space-y-6">
+            <div className="flex items-center justify-between text-xs font-mono text-slate-500 mb-2 min-w-[900px]">
+              <span className="font-bold text-railway-800">NORTH TERMINAL: ALUVA (ST-01)</span>
+              <span className="font-bold text-railway-800">SOUTH TERMINAL: THRIPUNITHURA (ST-23)</span>
+            </div>
+
+            {/* Visual Metro Line Track */}
+            <div className="relative min-w-[900px] py-8 px-4 bg-slate-50 rounded-xl border border-slate-200">
+              {/* Rail Track Line */}
+              <div className="absolute top-1/2 left-8 right-8 h-3 bg-railway-800 rounded-full -translate-y-1/2 shadow-inner"></div>
+              <div className="absolute top-1/2 left-8 right-8 h-1 bg-kmrl-teal rounded-full -translate-y-1/2"></div>
+
+              {/* Stations along line */}
+              <div className="relative flex justify-between items-center z-10">
+                {stations.map((st, idx) => (
+                  <div 
+                    key={st.id} 
+                    onClick={() => setSelectedStation(st)}
+                    className="flex flex-col items-center group cursor-pointer"
+                  >
+                    <div className="text-[9px] font-mono font-bold text-slate-500 group-hover:text-railway-800 transition-colors mb-1">
+                      {st.code}
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 transition-transform group-hover:scale-125 flex items-center justify-center ${
+                      st.type.includes('Terminal') ? 'bg-amber-400 border-amber-600' :
+                      st.type.includes('Interchange') ? 'bg-teal-400 border-teal-600' :
+                      'bg-white border-railway-800'
+                    }`}>
+                      <div className="w-1.5 h-1.5 rounded-full bg-railway-900"></div>
+                    </div>
+                    <div className="text-[10px] font-medium text-slate-700 mt-1 max-w-[50px] text-center truncate group-hover:text-railway-900 font-sans">
+                      {st.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Active Consists Running along the line */}
+            <div className="pt-2 border-t border-slate-100">
+              <h3 className="text-xs font-mono font-bold text-slate-700 uppercase mb-3">Active Rakes Currently Traversing Line 1:</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 font-mono text-xs">
+                {activeRakes.map(r => (
+                  <div key={r.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                    <div className="flex justify-between items-center font-bold">
+                      <span className="text-railway-900">{r.id}</span>
+                      <span className="text-emerald-600 text-[10px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">{r.speed} km/h</span>
+                    </div>
+                    <div className="text-[11px] text-slate-600">{r.block}</div>
+                    <div className="text-[10px] text-slate-400">Driver: {r.driver}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Station Detail Popup */}
+          {selectedStation && (
+            <Modal title={`Station Details: ${selectedStation.name} (${selectedStation.code})`} onClose={() => setSelectedStation(null)}>
+              <div className="space-y-3 font-mono text-xs">
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-slate-500">Distance from Aluva:</span>
+                  <span className="font-bold">{selectedStation.distKm} km</span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-slate-500">Station Type:</span>
+                  <span className="font-bold text-railway-800">{selectedStation.type}</span>
+                </div>
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-slate-500">Platforms:</span>
+                  <span className="font-bold">2 Side Platforms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">CCTV & PSD Sensors:</span>
+                  <span className="font-bold text-emerald-600">OPERATIONAL</span>
+                </div>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    // --- MODULE FOUR: SAFETY & INCIDENT DESK ---
+    function ViewSafety({ interlocks, setInterlocks, activityLogs, addToast, addActivityLog, isAllStopActive, resumeAllStop }) {
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+            <div>
+              <div className="flex items-center space-x-2 font-mono text-xs text-slate-500 uppercase">
+                <span>MODULE FOUR</span>
+                <span>/</span>
+                <span className="text-railway-800 font-bold">SAFETY DESK</span>
+              </div>
+              <h1 className="text-2xl font-extrabold text-railway-900 tracking-tight font-mono">
+                Safety, Interlocks & Incident Audit
+              </h1>
+            </div>
+            <div className="font-mono text-xs bg-red-100 text-red-800 px-2.5 py-1 rounded border border-red-300 font-bold">
+              {interlocks.length + (isAllStopActive ? 1 : 0)} Active Safety Holds
+            </div>
+          </div>
+
+          {/* Emergency State Handling */}
+          {isAllStopActive && (
+            <div className="p-4 bg-red-50 border border-red-300 rounded-xl flex items-center justify-between font-mono text-xs text-red-900">
+              <div>
+                <span className="font-bold text-sm">GLOBAL EMERGENCY HALT IN EFFECT</span>
+                <p className="text-red-700 mt-0.5">All signals set to RED. Require safety auditor override to resume.</p>
+              </div>
+              <button 
+                onClick={resumeAllStop}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded transition-colors"
+              >
+                REVOKE EMERGENCY HALT
+              </button>
+            </div>
+          )}
+
+          {/* Active Line Interlocks List */}
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 space-y-3">
+            <h2 className="font-mono text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Active Track Interlocks
+            </h2>
+            {interlocks.length === 0 ? (
+              <p className="text-xs font-mono text-slate-500 text-center py-4">No active safety holds or track interlocks recorded.</p>
+            ) : (
+              interlocks.map(lock => (
+                <div key={lock.id} className="p-4 bg-amber-50 rounded-lg border border-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono text-xs">
+                  <div>
+                    <div className="font-bold text-amber-900 text-sm">{lock.trainId} — {lock.block}</div>
+                    <div className="text-amber-800 mt-1">{lock.cause}</div>
+                    <div className="text-[10px] text-amber-600 mt-1">Status: {lock.status} | Speed Cap: {lock.speedCap}</div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setInterlocks(prev => prev.filter(i => i.id !== lock.id));
+                      addActivityLog(`Interlock on ${lock.block} resolved manually via Safety Desk.`, 'SAFETY', 'success');
+                      addToast(`Interlock ${lock.id} cleared successfully.`, 'success');
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded transition-colors shrink-0"
+                  >
+                    RESOLVE & CLEAR
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Safety Activity Log */}
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 space-y-3">
+            <h2 className="font-mono text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Safety Audit Log
+            </h2>
+            <div className="space-y-2 font-mono text-xs max-h-80 overflow-y-auto">
+              {activityLogs.map(l => (
+                <div key={l.id} className="p-2.5 bg-slate-50 rounded border border-slate-200 flex justify-between">
+                  <div>
+                    <span className="font-bold text-railway-800">[{l.type}]</span> {l.text}
+                  </div>
+                  <span className="text-slate-400 text-[10px] shrink-0 ml-2">{l.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MODULE FIVE: ANALYTICS & FITNESS REPORTS ---
+    function ViewAnalytics({ rakes, metrics }) {
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+            <div>
+              <div className="flex items-center space-x-2 font-mono text-xs text-slate-500 uppercase">
+                <span>MODULE FIVE</span>
+                <span>/</span>
+                <span className="text-railway-800 font-bold">ANALYTICS & FITNESS</span>
+              </div>
+              <h1 className="text-2xl font-extrabold text-railway-900 tracking-tight font-mono">
+                Fleet Performance & Fitness Reports
+              </h1>
+            </div>
+            <div className="font-mono text-xs bg-slate-200 text-slate-700 px-2.5 py-1 rounded border border-slate-300">
+              Monthly Operational Report
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-bold">Total Mileage Logged</div>
+              <div className="text-2xl font-extrabold text-railway-900">1,083,720 km</div>
+              <div className="text-emerald-600 text-[11px]">+4.2% from previous month</div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-bold">Energy Efficiency</div>
+              <div className="text-2xl font-extrabold text-kmrl-darkteal">14.2 kWh / km</div>
+              <div className="text-emerald-600 text-[11px]">Regenerative braking efficiency 22%</div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-1">
+              <div className="text-[10px] text-slate-400 uppercase font-bold">Fitness Compliance</div>
+              <div className="text-2xl font-extrabold text-emerald-600">100% Valid</div>
+              <div className="text-slate-500 text-[11px]">Zero expired certificates</div>
+            </div>
+          </div>
+
+          {/* Detailed Fitness Expiry Table */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden font-mono text-xs">
+            <div className="p-4 border-b border-slate-100 font-bold text-slate-800">
+              Rake Fitness Certificate Renewal Matrix
+            </div>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase">
+                  <th className="p-3">Rake ID</th>
+                  <th className="p-3">Fitness Expiry Date</th>
+                  <th className="p-3">Current Mileage</th>
+                  <th className="p-3">Health Score</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rakes.map(r => (
+                  <tr key={r.id}>
+                    <td className="p-3 font-bold text-railway-900">{r.id}</td>
+                    <td className="p-3 text-slate-700">{r.fitnessExp}</td>
+                    <td className="p-3 text-slate-700">{r.mileage.toLocaleString()} km</td>
+                    <td className="p-3 text-slate-700">{r.health}%</td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-bold">
+                        CERTIFIED
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MODAL: DISPATCH EXTRA ---
+    function DispatchExtraModal({ rakes, onClose, onDispatch }) {
+      const [rakeId, setRakeId] = useState(rakes.find(r => r.status === 'Fit For Service')?.id || 'R-104');
+      const [route, setRoute] = useState('S-01 (Aluva Northbound Express)');
+      const [priority, setPriority] = useState('High');
+      const [driver, setDriver] = useState('D-204 (Standby Driver)');
+
+      return (
+        <Modal title="OCC Dispatch Extra Train Consist" onClose={onClose}>
+          <form onSubmit={(e) => { e.preventDefault(); onDispatch(rakeId, route, priority, driver); }} className="space-y-3 font-mono text-xs">
+            <div>
+              <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Select Ready Rake</label>
+              <select value={rakeId} onChange={e => setRakeId(e.target.value)} className="w-full p-2 border rounded bg-slate-50">
+                {rakes.filter(r => r.status === 'Fit For Service').map(r => (
+                  <option key={r.id} value={r.id}>{r.id} — Ready ({r.block})</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Target Route / Block</label>
+              <input type="text" value={route} onChange={e => setRoute(e.target.value)} className="w-full p-2 border rounded bg-slate-50" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Priority</label>
+                <select value={priority} onChange={e => setPriority(e.target.value)} className="w-full p-2 border rounded bg-slate-50">
+                  <option value="High">High Priority</option>
+                  <option value="Normal">Normal Service</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 text-[10px] uppercase font-bold mb-1">Assign Driver</label>
+                <input type="text" value={driver} onChange={e => setDriver(e.target.value)} className="w-full p-2 border rounded bg-slate-50" />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-3 border-t">
+              <button type="button" onClick={onClose} className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100">Cancel</button>
+              <button type="submit" className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded">
+                EXECUTE DISPATCH
+              </button>
+            </div>
+          </form>
+        </Modal>
+      );
+    }
+
+    // --- MODAL: EMERGENCY ALL STOP ---
+    function EmergencyStopModal({ onClose, onConfirm }) {
+      const [confirmPin, setConfirmPin] = useState('');
+      const [error, setError] = useState('');
+
+      const handleConfirm = (e) => {
+        e.preventDefault();
+        if (confirmPin === '1234' || confirmPin.toUpperCase() === 'CONFIRM') {
+          onConfirm();
+        } else {
+          setError('Invalid Operator PIN. Enter "1234" or "CONFIRM" to authorize safety halt.');
+        }
+      };
+
+      return (
+        <Modal title="🚨 CONFIRM SYSTEM-WIDE ALL STOP PROTOCOL" onClose={onClose}>
+          <form onSubmit={handleConfirm} className="space-y-4 font-sans text-xs">
+            <div className="p-3 bg-red-100 border border-red-300 rounded text-red-900 font-mono">
+              <div className="font-bold text-sm">WARNING: EMERGENCY ACTION</div>
+              <p className="mt-1">
+                Executing the All Stop Protocol will immediately switch all Line 1 signals to RED, cut traction current, and bring all active consists to an automatic emergency stop.
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 font-mono text-[10px] uppercase mb-1">
+                Enter Operator Override PIN (Default: 1234 or "CONFIRM")
+              </label>
+              <input 
+                type="password" 
+                placeholder="Enter PIN..."
+                value={confirmPin}
+                onChange={e => { setConfirmPin(e.target.value); setError(''); }}
+                className="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:outline-none focus:border-red-500"
+              />
+              {error && <p className="text-red-600 text-[11px] font-mono mt-1">{error}</p>}
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-3 border-t font-mono">
+              <button type="button" onClick={onClose} className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100">
+                CANCEL
+              </button>
+              <button type="submit" className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded shadow">
+                EXECUTE ALL STOP
+              </button>
+            </div>
+          </form>
+        </Modal>
+      );
+    }
+
+    // --- RENDER APP ---
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
